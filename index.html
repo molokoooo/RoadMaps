@@ -54,6 +54,7 @@
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
+        
         /* Улучшенные стили для темной темы */
         .dark input, .dark textarea, .dark select {
             background-color: #1e293b;
@@ -214,6 +215,29 @@
         .theme-toggle.animate {
             animation: themeTogglePulse 0.4s ease-in-out;
         }
+
+        /* Новые стили для размытия фона */
+        .backdrop-blur {
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+        .create-panel-mobile {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 50;
+            overflow-y: auto;
+            margin: 0;
+            border-radius: 0;
+            max-height: 100vh;
+        }
+        .create-panel-container {
+            position: relative;
+            min-height: 100vh;
+            padding-bottom: 80px;
+        }
     </style>
 </head>
 <body class="bg-gray-50 dark:bg-dark-950 text-gray-900 dark:text-gray-200 min-h-screen">
@@ -235,65 +259,65 @@
     <main class="container mx-auto px-4 py-8">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <!-- Создание RoadMap -->
-            <div id="createPanel" class="lg:col-span-1 bg-white dark:bg-dark-850 rounded-xl shadow-md p-6 h-fit sticky top-6 mobile-hidden">
-                <button id="closeCreatePanel" class="close-create-panel lg:hidden p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
-                    <i class="fas fa-times"></i>
-                </button>
-                <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100 mb-4 flex items-center">
-                    <i class="fas fa-plus-circle mr-2 text-blue-500"></i> Создать RoadMap
-                </h2>
+        <div id="createPanel" class="lg:col-span-1 bg-white dark:bg-dark-850 rounded-xl shadow-md p-6 h-fit sticky top-6 mobile-hidden lg:block">
+            <button id="closeCreatePanel" class="close-create-panel lg:hidden p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100 mb-4 flex items-center">
+                <i class="fas fa-plus-circle mr-2 text-blue-500"></i> Создать RoadMap
+            </h2>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Название RoadMap</label>
+                    <input type="text" id="roadmapTitle" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800">
+                </div>
                 
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Название RoadMap</label>
-                        <input type="text" id="roadmapTitle" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Описание</label>
+                    <textarea id="roadmapDescription" rows="3" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800"></textarea>
+                </div>
+                
+                <!-- Теги RoadMap -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Теги</label>
+                    <div class="flex flex-wrap gap-2 mb-2" id="tagsContainer"></div>
+                    <div class="flex">
+                        <input type="text" id="tagInput" placeholder="Добавить тег" class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800">
+                        <button id="addTagBtn" class="px-3 py-2 bg-blue-500 text-white rounded-r-md hover:bg-blue-600 transition">+</button>
                     </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Описание</label>
-                        <textarea id="roadmapDescription" rows="3" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800"></textarea>
-                    </div>
-                    
-                    <!-- Теги RoadMap -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Теги</label>
-                        <div class="flex flex-wrap gap-2 mb-2" id="tagsContainer"></div>
-                        <div class="flex">
-                            <input type="text" id="tagInput" placeholder="Добавить тег" class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-l-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800">
-                            <button id="addTagBtn" class="px-3 py-2 bg-blue-500 text-white rounded-r-md hover:bg-blue-600 transition">+</button>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Добавить этап</label>
+                    <div class="space-y-2">
+                        <input type="text" id="stageName" placeholder="Название этапа" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800">
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Добавить описание этапу</label>
+                            <textarea id="stageDescription" placeholder="Описание этапа" rows="2" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800"></textarea>
                         </div>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Добавить этап</label>
-                        <div class="space-y-2">
-                            <input type="text" id="stageName" placeholder="Название этапа" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800">
-                            
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Добавить описание этапу</label>
-                                <textarea id="stageDescription" placeholder="Описание этапа" rows="2" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800"></textarea>
-                            </div>
-                            
-                            <button id="addStageBtn" class="w-full px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition">
-                                <i class="fas fa-plus mr-1"></i> Добавить этап
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div id="stagesList" class="stages-container space-y-2 max-h-60 overflow-y-auto p-2 border border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800">
-                        <p class="text-sm text-gray-500 dark:text-gray-400 italic">Этапы появятся здесь</p>
-                    </div>
-                    
-                    <div class="flex space-x-3 pt-2">
-                        <button id="saveRoadmapBtn" class="flex-1 px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition flex items-center justify-center">
-                            <i class="fas fa-save mr-2"></i> Сохранить
-                        </button>
-                        <button id="clearFormBtn" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition">
-                            <i class="fas fa-trash-alt"></i>
+                        
+                        <button id="addStageBtn" class="w-full px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition">
+                            <i class="fas fa-plus mr-1"></i> Добавить этап
                         </button>
                     </div>
                 </div>
+                
+                <div id="stagesList" class="stages-container space-y-2 max-h-60 overflow-y-auto p-2 border border-gray-200 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-800">
+                    <p class="text-sm text-gray-500 dark:text-gray-400 italic">Этапы появятся здесь</p>
+                </div>
+                
+                <div class="flex space-x-3 pt-2">
+                    <button id="saveRoadmapBtn" class="flex-1 px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition flex items-center justify-center">
+                        <i class="fas fa-save mr-2"></i> Сохранить
+                    </button>
+                    <button id="clearFormBtn" class="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
             </div>
+        </div>
             
             <!-- Просмотр RoadMap -->
             <div class="lg:col-span-2 space-y-8 mobile-full">
@@ -396,6 +420,9 @@
         <i class="fas fa-plus text-xl"></i>
     </button>
 
+    <!-- Размытый фон для мобильной панели -->
+    <div id="mobileBackdrop" class="fixed inset-0 bg-black bg-opacity-50 backdrop-blur z-40 hidden"></div>
+
     <!-- Модальное окно для шаринга -->
     <div id="shareModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
         <div class="bg-white dark:bg-dark-850 rounded-xl p-6 max-w-md w-full mx-4">
@@ -476,16 +503,32 @@
             const mobileCreateBtn = document.getElementById('mobileCreateBtn');
             const closeCreatePanel = document.getElementById('closeCreatePanel');
             const createPanel = document.getElementById('createPanel');
+            const mobileBackdrop = document.getElementById('mobileBackdrop');
             
             mobileCreateBtn.addEventListener('click', () => {
+                mobileBackdrop.classList.remove('hidden');
                 createPanel.classList.remove('mobile-hidden');
-                createPanel.classList.add('fixed', 'inset-0', 'z-50', 'm-4', 'overflow-auto');
+                createPanel.classList.add('create-panel-mobile', 'z-50');
                 document.body.classList.add('overflow-hidden');
+                
+                // Прокрутка к верху панели
+                setTimeout(() => {
+                    createPanel.scrollTo(0, 0);
+                }, 10);
             });
             
             closeCreatePanel.addEventListener('click', () => {
+                mobileBackdrop.classList.add('hidden');
                 createPanel.classList.add('mobile-hidden');
-                createPanel.classList.remove('fixed', 'inset-0', 'z-50', 'm-4', 'overflow-auto');
+                createPanel.classList.remove('create-panel-mobile', 'z-50');
+                document.body.classList.remove('overflow-hidden');
+            });
+
+            // Закрытие по клику на бэкдроп
+            mobileBackdrop.addEventListener('click', () => {
+                mobileBackdrop.classList.add('hidden');
+                createPanel.classList.add('mobile-hidden');
+                createPanel.classList.remove('create-panel-mobile', 'z-50');
                 document.body.classList.remove('overflow-hidden');
             });
             
@@ -730,8 +773,9 @@
                 
                 // На мобильных устройствах закрываем панель после сохранения
                 if (window.innerWidth < 1024) {
+                    mobileBackdrop.classList.add('hidden');
                     createPanel.classList.add('mobile-hidden');
-                    createPanel.classList.remove('fixed', 'inset-0', 'z-50', 'm-4', 'overflow-auto');
+                    createPanel.classList.remove('create-panel-mobile', 'z-50');
                     document.body.classList.remove('overflow-hidden');
                 }
             });
