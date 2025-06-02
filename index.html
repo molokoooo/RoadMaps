@@ -467,28 +467,175 @@
     </footer>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Тема
-            const toggleTheme = document.getElementById('toggleTheme');
-            const html = document.documentElement;
+document.addEventListener('DOMContentLoaded', function() {
+    // Конфигурация GitHub
+    const GITHUB_API_URL = 'https://api.github.com';
+    const REPO_OWNER = 'ваш_логин_github';
+    const REPO_NAME = 'ваш_репозиторий';
+    const FILE_PATH = 'roadmaps.json';
+    const GITHUB_TOKEN = 'ваш_github_token'; // Создайте token с правами repo
 
-            if (localStorage.getItem('theme') === 'dark') {
-                html.classList.add('dark');
-                toggleTheme.innerHTML = '<i class="fas fa-sun"></i>';
-            } else {
-                toggleTheme.innerHTML = '<i class="fas fa-moon"></i>';
+    // DOM элементы
+    const html = document.documentElement;
+    const toggleTheme = document.getElementById('toggleTheme');
+    const mobileCreateBtn = document.getElementById('mobileCreateBtn');
+    const closeCreatePanel = document.getElementById('closeCreatePanel');
+    const createPanel = document.getElementById('createPanel');
+    const mobileBackdrop = document.getElementById('mobileBackdrop');
+    const addTagBtn = document.getElementById('addTagBtn');
+    const tagInput = document.getElementById('tagInput');
+    const tagsContainer = document.getElementById('tagsContainer');
+    const addStageBtn = document.getElementById('addStageBtn');
+    const stageNameInput = document.getElementById('stageName');
+    const stageDescriptionInput = document.getElementById('stageDescription');
+    const stagesList = document.getElementById('stagesList');
+    const saveRoadmapBtn = document.getElementById('saveRoadmapBtn');
+    const roadmapTitle = document.getElementById('roadmapTitle');
+    const roadmapDescription = document.getElementById('roadmapDescription');
+    const clearFormBtn = document.getElementById('clearFormBtn');
+    const roadmapsList = document.getElementById('roadmapsList');
+    const roadmapView = document.getElementById('roadmapView');
+    const viewTitle = document.getElementById('viewTitle');
+    const viewDescription = document.getElementById('viewDescription');
+    const viewDate = document.getElementById('viewDate');
+    const timelineContent = document.getElementById('timelineContent');
+    const closeViewBtn = document.getElementById('closeViewBtn');
+    const progressText = document.getElementById('progressText');
+    const progressFill = document.querySelector('.progress-fill');
+    const searchRoadmap = document.getElementById('searchRoadmap');
+    const shareBtn = document.getElementById('shareBtn');
+    const shareModal = document.getElementById('shareModal');
+    const closeShareModal = document.getElementById('closeShareModal');
+    const shareLink = document.getElementById('shareLink');
+    const copyLinkBtn = document.getElementById('copyLinkBtn');
+    const tagFiltersContainer = document.getElementById('tagFiltersContainer');
+    const syncBtn = document.createElement('button'); // Кнопка синхронизации
+
+    // Инициализация данных
+    let roadmaps = [];
+    let stages = [];
+    let tags = [];
+    let draggedItem = null;
+    let currentTagFilter = 'all';
+    
+    // ================ GitHub API ================ //
+    
+    /**
+     * Загружает данные из GitHub
+     */
+    async function loadFromGitHub() {
+        try {
+            const response = await fetch(
+                `${GITHUB_API_URL}/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`,
+                {
+                    headers: {
+                        'Authorization': `token ${GITHUB_TOKEN}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                }
+            );
+            
+            if (!response.ok) throw new Error('Ошибка загрузки данных');
+            
+            const data = await response.json();
+            const content = atob(data.content);
+            roadmaps = JSON.parse(content);
+            
+            localStorage.setItem('roadmaps', JSON.stringify(roadmaps));
+            renderRoadmapsList();
+            renderTagFilters();
+            
+            console.log('Данные загружены с GitHub');
+        } catch (error) {
+            console.error('Ошибка загрузки с GitHub:', error);
+            alert('Ошибка загрузки данных. Используются локальные данные.');
+            roadmaps = JSON.parse(localStorage.getItem('roadmaps')) || [];
+            renderRoadmapsList();
+            renderTagFilters();
+        }
+    }
+    
+    /**
+     * Сохраняет данные на GitHub
+     */
+    async function saveToGitHub() {
+        try {
+            // Получаем текущий SHA файла
+            const getResponse = await fetch(
+                `${GITHUB_API_URL}/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`,
+                {
+                    headers: {
+                        'Authorization': `token ${GITHUB_TOKEN}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                }
+            );
+            
+            let sha = null;
+            if (getResponse.ok) {
+                const fileData = await getResponse.json();
+                sha = fileData.sha;
             }
-
+            
+            // Подготавливаем данные для отправки
+            const content = btoa(JSON.stringify(roadmaps));
+            const body = {
+                message: 'Update roadmaps data',
+                content: content,
+                sha: sha
+            };
+            
+            // Отправляем обновление
+            const putResponse = await fetch(
+                `${GITHUB_API_URL}/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`,
+                {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${GITHUB_TOKEN}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                }
+            );
+            
+            if (!putResponse.ok) throw new Error('Ошибка сохранения данных');
+            
+            console.log('Данные сохранены на GitHub');
+        } catch (error) {
+            console.error('Ошибка сохранения на GitHub:', error);
+            alert('Ошибка синхронизации с GitHub. Данные сохранены локально.');
+        }
+    }
+    
+    // Создаем кнопку синхронизации
+    syncBtn.id = 'syncBtn';
+    syncBtn.className = 'px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-300 rounded-md text-sm hover:bg-green-200 dark:hover:bg-green-800/50 transition ml-2';
+    syncBtn.innerHTML = '<i class="fas fa-sync-alt mr-1"></i> Синхронизировать';
+    
+    // Добавляем кнопку в интерфейс
+    const roadmapHeader = document.querySelector('#roadmapsList').previousElementSibling;
+    roadmapHeader.appendChild(syncBtn);
+    
+    // Обработчик синхронизации
+    syncBtn.addEventListener('click', async () => {
+        syncBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Синхронизация...';
+        await saveToGitHub();
+        await loadFromGitHub();
+        syncBtn.innerHTML = '<i class="fas fa-sync-alt mr-1"></i> Синхронизировать';
+    });
+    
+    // ================ ТЕМА ================ //
+    
+    if (localStorage.getItem('theme') === 'dark') {
+        html.classList.add('dark');
+        toggleTheme.innerHTML = '<i class="fas fa-sun"></i>';
+    }
+    
     toggleTheme.addEventListener('click', () => {
-        // Добавляем анимацию
         toggleTheme.classList.add('animate');
-
-        // Удаляем анимацию после завершения
-        setTimeout(() => {
-            toggleTheme.classList.remove('animate');
-        }, 400);
-
-        // Переключение темы
+        setTimeout(() => toggleTheme.classList.remove('animate'), 400);
+        
         html.classList.toggle('dark');
         if (html.classList.contains('dark')) {
             localStorage.setItem('theme', 'dark');
@@ -498,654 +645,495 @@
             toggleTheme.innerHTML = '<i class="fas fa-moon"></i>';
         }
     });
-            
-            // Управление панелью создания на мобильных
-            const mobileCreateBtn = document.getElementById('mobileCreateBtn');
-            const closeCreatePanel = document.getElementById('closeCreatePanel');
-            const createPanel = document.getElementById('createPanel');
-            const mobileBackdrop = document.getElementById('mobileBackdrop');
-            
-            mobileCreateBtn.addEventListener('click', () => {
-                mobileBackdrop.classList.remove('hidden');
-                createPanel.classList.remove('mobile-hidden');
-                createPanel.classList.add('create-panel-mobile', 'z-50');
-                document.body.classList.add('overflow-hidden');
-                
-                // Прокрутка к верху панели
-                setTimeout(() => {
-                    createPanel.scrollTo(0, 0);
-                }, 10);
-            });
-            
-            closeCreatePanel.addEventListener('click', () => {
-                mobileBackdrop.classList.add('hidden');
-                createPanel.classList.add('mobile-hidden');
-                createPanel.classList.remove('create-panel-mobile', 'z-50');
-                document.body.classList.remove('overflow-hidden');
-            });
-
-            // Закрытие по клику на бэкдроп
-            mobileBackdrop.addEventListener('click', () => {
-                mobileBackdrop.classList.add('hidden');
-                createPanel.classList.add('mobile-hidden');
-                createPanel.classList.remove('create-panel-mobile', 'z-50');
-                document.body.classList.remove('overflow-hidden');
-            });
-            
-            // Работа с RoadMaps
-            let roadmaps = JSON.parse(localStorage.getItem('roadmaps')) || [];
-            let stages = [];
-            let tags = [];
-            let members = [];
-            
-            // Drag & Drop для этапов
-            let draggedItem = null;
-            
-            function setupDragAndDrop() {
-                document.querySelectorAll('.stage-item').forEach(item => {
-                    item.setAttribute('draggable', true);
-                    
-                    item.addEventListener('dragstart', function(e) {
-                        draggedItem = this;
-                        this.classList.add('dragging');
-                        e.dataTransfer.setData('text/plain', this.getAttribute('data-index'));
-                    });
-                    
-                    item.addEventListener('dragend', function() {
-                        this.classList.remove('dragging');
-                        draggedItem = null;
-                    });
-                    
-                    item.addEventListener('dragover', function(e) {
-                        e.preventDefault();
-                        this.classList.add('drag-over');
-                    });
-                    
-                    item.addEventListener('dragleave', function() {
-                        this.classList.remove('drag-over');
-                    });
-                    
-                    item.addEventListener('drop', function(e) {
-                        e.preventDefault();
-                        this.classList.remove('drag-over');
-                        
-                        if (draggedItem !== this) {
-                            const targetIndex = parseInt(this.getAttribute('data-index'));
-                            const draggedIndex = parseInt(draggedItem.getAttribute('data-index'));
-                            
-                            if (!isNaN(targetIndex) && !isNaN(draggedIndex)) {
-                                // Перемещаем элемент в массиве stages
-                                const draggedStage = stages[draggedIndex];
-                                stages.splice(draggedIndex, 1);
-                                stages.splice(targetIndex, 0, draggedStage);
-                                
-                                updateStagesList();
-                            }
-                        }
-                    });
-                });
-            }
-            
-            // Теги RoadMap
-            const addTagBtn = document.getElementById('addTagBtn');
-            const tagInput = document.getElementById('tagInput');
-            const tagsContainer = document.getElementById('tagsContainer');
-            
-            addTagBtn.addEventListener('click', () => {
-                const tag = tagInput.value.trim();
-                if (tag && !tags.includes(tag)) {
-                    tags.push(tag);
-                    renderTags();
-                    tagInput.value = '';
-                }
-            });
-            
-            tagInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    addTagBtn.click();
-                }
-            });
-            
-            function renderTags() {
-                tagsContainer.innerHTML = '';
-                tags.forEach(tag => {
-                    const tagElement = document.createElement('div');
-                    tagElement.className = 'tag';
-                    tagElement.innerHTML = `
-                        ${tag}
-                        <span class="tag-remove" data-tag="${tag}">
-                            <i class="fas fa-times"></i>
-                        </span>
-                    `;
-                    tagsContainer.appendChild(tagElement);
-                });
-                
-                document.querySelectorAll('.tag-remove').forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        const tagToRemove = this.parentElement.getAttribute('data-tag');
-                        tags = tags.filter(t => t !== tagToRemove);
-                        renderTags();
-                    });
-                });
-            }
-            
-            // Добавление этапа
-            const addStageBtn = document.getElementById('addStageBtn');
-            const stageNameInput = document.getElementById('stageName');
-            const stageDescriptionInput = document.getElementById('stageDescription');
-            const stagesList = document.getElementById('stagesList');
-            
-            addStageBtn.addEventListener('click', () => {
-                const stageName = stageNameInput.value.trim();
-                const stageDescription = stageDescriptionInput.value.trim();
-                
-                if (stageName) {
-                    stages.push({ 
-                        name: stageName, 
-                        description: stageDescription,
-                        completed: false 
-                    });
-                    updateStagesList();
-                    stageNameInput.value = '';
-                    stageDescriptionInput.value = '';
-                    stageNameInput.focus();
-                }
-            });
-            
-            stageNameInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    addStageBtn.click();
-                }
-            });
-            
-            function updateStagesList() {
-                if (stages.length === 0) {
-                    stagesList.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400 italic">Этапы появятся здесь</p>';
-                    return;
-                }
-
-                stagesList.innerHTML = '';
-                stages.forEach((stage, index) => {
-                    const stageElement = document.createElement('div');
-                    stageElement.className = 'stage-item flex justify-between items-center bg-gray-100 dark:bg-gray-700 p-2 rounded-md';
-                    stageElement.setAttribute('data-index', index);
-
-                    stageElement.innerHTML = `
-                        <div class="flex items-start space-x-2 w-full">
-                            <span class="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300 text-xs font-medium px-2 py-0.5 rounded mt-1">${index + 1}</span>
-                            <div class="flex-1">
-                                <div class="${stage.completed ? 'line-through text-green-500' : 'text-gray-800 dark:text-gray-300'}">${stage.name}</div>
-                                ${stage.description ? `<div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${stage.description}</div>` : ''}
-                                
-                                ${stage.tags && stage.tags.length > 0 ? `
-                                    <div class="flex flex-wrap gap-1 mt-1">
-                                        ${stage.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
-                                    </div>
-                                ` : ''}
-                                
-                                ${stage.comment ? `
-                                    <div class="stage-comment mt-2">
-                                        <p class="text-xs text-gray-600 dark:text-gray-400">${stage.comment}</p>
-                                    </div>
-                                ` : ''}
-                            </div>
-                        </div>
-                        <div class="flex space-x-2">
-                            <button class="complete-stage text-green-500 hover:text-green-700 dark:hover:text-green-400 text-sm" data-index="${index}" title="Выполнено">
-                                <i class="fas fa-check-circle"></i>
-                            </button>
-                            <button class="remove-stage text-red-500 hover:text-red-700 dark:hover:text-red-400" data-index="${index}" title="Удалить">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                    `;
-                    stagesList.appendChild(stageElement);
-                });
-
-                // Обработчики
-                document.querySelectorAll('.remove-stage').forEach(btn => {
-                    btn.addEventListener('click', function () {
-                        const index = parseInt(this.getAttribute('data-index'));
-                        stages.splice(index, 1);
-                        updateStagesList();
-                    });
-                });
-
-                document.querySelectorAll('.complete-stage').forEach(btn => {
-                    btn.addEventListener('click', function () {
-                        const index = parseInt(this.getAttribute('data-index'));
-                        stages[index].completed = !stages[index].completed;
-                        updateStagesList();
-                    });
-                });
-                
-                // Настраиваем Drag & Drop
-                setupDragAndDrop();
-            }
-            
-            // Сохранение RoadMap
-            const saveRoadmapBtn = document.getElementById('saveRoadmapBtn');
-            const roadmapTitle = document.getElementById('roadmapTitle');
-            const roadmapDescription = document.getElementById('roadmapDescription');
-            const roadmapsList = document.getElementById('roadmapsList');
-            
-            saveRoadmapBtn.addEventListener('click', () => {
-                const title = roadmapTitle.value.trim();
-                const description = roadmapDescription.value.trim();
-                
-                if (!title) {
-                    alert('Пожалуйста, укажите название RoadMap');
-                    return;
-                }
-                
-                if (stages.length === 0) {
-                    alert('Пожалуйста, добавьте хотя бы один этап');
-                    return;
-                }
-                
-                const newRoadmap = {
-                    id: Date.now(),
-                    title,
-                    description,
-                    tags: [...tags],
-                    members: [...members],
-                    stages: [...stages],
-                    createdAt: new Date().toLocaleDateString('ru-RU')
-                };
-                
-                roadmaps.unshift(newRoadmap);
-                localStorage.setItem('roadmaps', JSON.stringify(roadmaps));
-                
-                renderRoadmapsList();
-                renderTagFilters();
-                clearForm();
-                
-                // Анимация успешного сохранения
-                saveRoadmapBtn.innerHTML = '<i class="fas fa-check mr-2"></i> Сохранено!';
-                saveRoadmapBtn.classList.remove('bg-green-500', 'hover:bg-green-600');
-                saveRoadmapBtn.classList.add('bg-green-600');
-                
-                setTimeout(() => {
-                    saveRoadmapBtn.innerHTML = '<i class="fas fa-save mr-2"></i> Сохранить';
-                    saveRoadmapBtn.classList.remove('bg-green-600');
-                    saveRoadmapBtn.classList.add('bg-green-500', 'hover:bg-green-600');
-                }, 2000);
-                
-                // На мобильных устройствах закрываем панель после сохранения
-                if (window.innerWidth < 1024) {
-                    mobileBackdrop.classList.add('hidden');
-                    createPanel.classList.add('mobile-hidden');
-                    createPanel.classList.remove('create-panel-mobile', 'z-50');
-                    document.body.classList.remove('overflow-hidden');
-                }
-            });
-            
-            // Очистка формы
-            const clearFormBtn = document.getElementById('clearFormBtn');
-            clearFormBtn.addEventListener('click', clearForm);
-            
-            function clearForm() {
-                roadmapTitle.value = '';
-                roadmapDescription.value = '';
-                stageNameInput.value = '';
-                stageDescriptionInput.value = '';
-                
-                // Если были добавлены поля:
-                if (typeof stageTagInput !== 'undefined') stageTagInput.value = '';
-                if (typeof stageCommentInput !== 'undefined') stageCommentInput.value = '';
-
-                // Очистить массивы
-                tags = [];
-                stages = [];
-
-                // Перерисовать
+    
+    // ================ МОБИЛЬНАЯ ПАНЕЛЬ ================ //
+    
+    mobileCreateBtn.addEventListener('click', () => {
+        mobileBackdrop.classList.remove('hidden');
+        createPanel.classList.remove('mobile-hidden');
+        createPanel.classList.add('create-panel-mobile', 'z-50');
+        document.body.classList.add('overflow-hidden');
+        setTimeout(() => createPanel.scrollTo(0, 0), 10);
+    });
+    
+    closeCreatePanel.addEventListener('click', closeMobilePanel);
+    mobileBackdrop.addEventListener('click', closeMobilePanel);
+    
+    function closeMobilePanel() {
+        mobileBackdrop.classList.add('hidden');
+        createPanel.classList.add('mobile-hidden');
+        createPanel.classList.remove('create-panel-mobile', 'z-50');
+        document.body.classList.remove('overflow-hidden');
+    }
+    
+    // ================ ТЕГИ ================ //
+    
+    addTagBtn.addEventListener('click', addTag);
+    tagInput.addEventListener('keypress', e => {
+        if (e.key === 'Enter') addTag();
+    });
+    
+    function addTag() {
+        const tag = tagInput.value.trim();
+        if (tag && !tags.includes(tag)) {
+            tags.push(tag);
+            renderTags();
+            tagInput.value = '';
+        }
+    }
+    
+    function renderTags() {
+        tagsContainer.innerHTML = '';
+        tags.forEach(tag => {
+            const tagElement = document.createElement('div');
+            tagElement.className = 'tag';
+            tagElement.innerHTML = `
+                ${tag}
+                <span class="tag-remove" data-tag="${tag}">
+                    <i class="fas fa-times"></i>
+                </span>
+            `;
+            tagsContainer.appendChild(tagElement);
+        });
+        
+        document.querySelectorAll('.tag-remove').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const tagToRemove = this.parentElement.textContent.trim();
+                tags = tags.filter(t => t !== tagToRemove);
                 renderTags();
-                updateStagesList();
-            }
-            
-            // Расчет прогресса
-            function calculateProgress(roadmap) {
-                const total = roadmap.stages.length;
-                const completed = roadmap.stages.filter(s => s.completed).length;
-                return total > 0 ? Math.round((completed / total) * 100) : 0;
-            }
-            
-            // Рендер списка RoadMaps
-            function renderRoadmapsList(filter = '', tagFilter = null) {
-                roadmapsList.innerHTML = '';
-                
-                let filteredRoadmaps = roadmaps;
-                
-                // Фильтрация по поиску
-                if (filter) {
-                    filteredRoadmaps = filteredRoadmaps.filter(roadmap => 
-                        roadmap.title.toLowerCase().includes(filter.toLowerCase()) || 
-                        roadmap.description.toLowerCase().includes(filter.toLowerCase())
-                    );
-                }
-                
-                // Фильтрация по тегу
-                if (tagFilter && tagFilter !== 'all') {
-                    filteredRoadmaps = filteredRoadmaps.filter(roadmap => 
-                        roadmap.tags && roadmap.tags.includes(tagFilter)
-                    );
-                }
-                
-                if (filteredRoadmaps.length === 0) {
-                    roadmapsList.innerHTML = `
-                        <div class="text-center py-8">
-                            <i class="fas fa-road text-4xl text-gray-300 dark:text-gray-600 mb-3"></i>
-                            <p class="text-gray-500 dark:text-gray-400">RoadMaps не найдены</p>
-                        </div>
-                    `;
-                    return;
-                }
-                
-                filteredRoadmaps.forEach(roadmap => {
-                    const progress = calculateProgress(roadmap);
-                    
-                    const roadmapElement = document.createElement('div');
-                    roadmapElement.className = 'roadmap-item bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4 fade-in slide-in';
-                    
-                    roadmapElement.innerHTML = `
-                        <div class="flex justify-between items-start">
-                            <div>
-                                <h3 class="font-bold text-lg text-gray-800 dark:text-gray-100">${roadmap.title}</h3>
-                                <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">${roadmap.description || 'Нет описания'}</p>
-                                
-                                ${roadmap.tags && roadmap.tags.length > 0 ? `
-                                    <div class="flex flex-wrap gap-1 mt-2">
-                                        ${roadmap.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
-                                    </div>
-                                ` : ''}
-                            </div>
-                            <div class="flex space-x-2">
-                                <button class="view-btn px-3 py-1 bg-blue-100 dark:bg-blue-800/50 text-blue-600 dark:text-blue-200 rounded-md text-sm hover:bg-blue-200 dark:hover:bg-blue-700 transition" data-id="${roadmap.id}">
-                                    <i class="fas fa-eye mr-1"></i> Просмотр
-                                </button>
-                                <button class="delete-btn px-3 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300 rounded-md text-sm hover:bg-red-200 dark:hover:bg-red-800/50 transition" data-id="${roadmap.id}">
-                                    <i class="fas fa-trash-alt mr-1"></i> Удалить
-                                </button>
-                            </div>
-                        </div>
-                        <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
-                            <div class="flex justify-between items-center">
-                                <div class="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                                    <i class="fas fa-calendar-alt mr-1"></i>
-                                    <span>Создано: ${roadmap.createdAt}</span>
-                                </div>
-                                <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                    <span>${progress}% завершено</span>
-                                </div>
-                            </div>
-                            <div class="progress-bar mt-2">
-                                <div class="progress-fill" style="width: ${progress}%"></div>
-                            </div>
-                        </div>
-                    `;
-                    roadmapsList.appendChild(roadmapElement);
-                });
-                
-                // Добавляем обработчики для кнопок просмотра и удаления
-                document.querySelectorAll('.view-btn').forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        const id = parseInt(this.getAttribute('data-id'));
-                        viewRoadmap(id);
-                    });
-                });
-                
-                document.querySelectorAll('.delete-btn').forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        const id = parseInt(this.getAttribute('data-id'));
-                        deleteRoadmap(id);
-                    });
-                });
-            }
-            
-            // Рендер фильтров по тегам
-            function renderTagFilters() {
-                const tagFiltersContainer = document.getElementById('tagFiltersContainer');
-                // Оставляем кнопку "Все"
-                tagFiltersContainer.innerHTML = '<button class="tag-filter px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded-full text-sm hover:bg-blue-200 dark:hover:bg-blue-800/50 transition active" data-tag="all">Все</button>';
-                
-                // Собираем все уникальные теги из всех RoadMaps
-                const allTags = [...new Set(roadmaps.flatMap(r => r.tags || []))];
-                
-                allTags.forEach(tag => {
-                    const button = document.createElement('button');
-                    button.className = 'tag-filter px-3 py-1 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 rounded-full text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition';
-                    button.textContent = tag;
-                    button.setAttribute('data-tag', tag);
-                    tagFiltersContainer.appendChild(button);
-                });
-                
-                // Обработчики для фильтров
-                document.querySelectorAll('.tag-filter').forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        const tag = this.getAttribute('data-tag');
-                        
-                        // Обновляем активное состояние
-                        document.querySelectorAll('.tag-filter').forEach(b => 
-                            b.classList.remove('active')
-                        );
-                        this.classList.add('active');
-                        
-                        // Применяем фильтр
-                        renderRoadmapsList(searchRoadmap.value, tag);
-                    });
-                });
-            }
-            
-            // Просмотр RoadMap
-            const roadmapView = document.getElementById('roadmapView');
-            const viewTitle = document.getElementById('viewTitle');
-            const viewDescription = document.getElementById('viewDescription');
-            const viewDate = document.getElementById('viewDate');
-            const timelineContent = document.getElementById('timelineContent');
-            const closeViewBtn = document.getElementById('closeViewBtn');
-            const progressText = document.getElementById('progressText');
-            const progressFill = document.querySelector('.progress-fill');
-
-            function renderTags() {
-                tagsContainer.innerHTML = '';
-                tags.forEach(tag => {
-                    const tagElement = document.createElement('div');
-                    tagElement.className = 'tag';
-                    tagElement.setAttribute('data-tag', tag); // ВАЖНО: нужно для удаления
-                    tagElement.innerHTML = `
-                        ${tag}
-                        <span class="tag-remove" data-tag="${tag}">
-                            <i class="fas fa-times"></i>
-                        </span>
-                    `;
-                    tagsContainer.appendChild(tagElement);
-                });
-                // Привязка обработчиков после отрисовки
-                document.querySelectorAll('.tag-remove').forEach(btn => {
-                    btn.addEventListener('click', function () {
-                        const tagToRemove = this.getAttribute('data-tag');
-                        tags = tags.filter(t => t !== tagToRemove);
-                        renderTags(); // перерисовываем список
-                    });
-                });
-            }
-
-            function viewRoadmap(id) {
-                const roadmap = roadmaps.find(r => r.id === id);
-                if (!roadmap) return;
-                
-                viewTitle.textContent = roadmap.title;
-                viewTitle.setAttribute('data-id', roadmap.id);
-                viewDescription.textContent = roadmap.description || 'Нет описания';
-                viewDate.textContent = `Создано: ${roadmap.createdAt}`;
-                
-                // Обновляем прогрессбар
-                const progress = calculateProgress(roadmap);
-                progressText.textContent = `${progress}%`;
-                progressFill.style.width = `${progress}%`;
-                
-                timelineContent.innerHTML = '';
-                roadmap.stages.forEach((stage, index) => {
-                    const stageElement = document.createElement('div');
-                    stageElement.className = `relative ${index % 2 === 0 ? 'lg:pr-24' : 'lg:pl-24'} ${stage.completed ? 'stage-completed' : ''}`;
-                    
-                    const dotClass = index % 2 === 0 ? 'left-0 lg:left-1/2' : 'left-0 lg:left-1/2';
-                    const contentClass = index % 2 === 0 ? 'lg:mr-6' : 'lg:ml-6';
-                    
-                    stageElement.innerHTML = `
-                        <div class="stage-dot absolute w-4 h-4 rounded-full bg-blue-500 border-4 border-white dark:border-gray-800 -left-2 ${dotClass} -translate-x-1/2 top-6 z-10"></div>
-                        <div class="stage-content bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 ${contentClass}">
-                            <div class="flex items-center mb-2">
-                                <span class="bg-blue-500 text-white text-xs font-bold px-2 py-1 rounded mr-2">Этап ${index + 1}</span>
-                                <h4 class="font-semibold text-gray-800 dark:text-gray-200 stage-title">${stage.name}</h4>
-                            </div>
-                            ${stage.description ? `<p class="text-sm text-gray-600 dark:text-gray-300 mt-2">${stage.description}</p>` : ''}
-                            
-                            ${stage.tags && stage.tags.length > 0 ? `
-                                <div class="flex flex-wrap gap-1 mt-2">
-                                    ${stage.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
-                                </div>
-                            ` : ''}
-                            
-                            ${stage.comment ? `
-                                <div class="stage-comment">
-                                    <p class="text-sm text-gray-700 dark:text-gray-300">${stage.comment}</p>
-                                </div>
-                            ` : ''}
-                            
-                            <div class="flex justify-between items-center mt-4">
-                                <div class="flex space-x-2">
-                                    <span class="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-gray-600 dark:text-gray-300">${stage.completed ? 'Завершено' : 'В процессе'}</span>
-                                </div>
-                                <button class="complete-stage-btn px-3 py-1 ${stage.completed ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'} rounded-md text-sm hover:opacity-90 transition" data-roadmap-id="${roadmap.id}" data-stage-index="${index}">
-                                    <i class="fas ${stage.completed ? 'fa-check-circle' : 'fa-circle'} mr-1"></i> ${stage.completed ? 'Выполнено' : 'Отметить'}
-                                </button>
-                            </div>
-                        </div>
-                    `;
-                    timelineContent.appendChild(stageElement);
-                });
-                
-                // Добавляем обработчики для кнопок выполнения этапов
-                document.querySelectorAll('.complete-stage-btn').forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        const roadmapId = parseInt(this.getAttribute('data-roadmap-id'));
-                        const stageIndex = parseInt(this.getAttribute('data-stage-index'));
-                        toggleStageCompletion(roadmapId, stageIndex);
-                    });
-                });
-                
-                roadmapView.classList.remove('hidden');
-                roadmapView.classList.add('slide-in');
-                window.scrollTo({
-                    top: roadmapView.offsetTop - 20,
-                    behavior: 'smooth'
-                });
-            }
-            
-            // Переключение статуса выполнения этапа
-            function toggleStageCompletion(roadmapId, stageIndex) {
-                const roadmap = roadmaps.find(r => r.id === roadmapId);
-                if (!roadmap) return;
-                
-                // Инвертируем статус выполнения
-                roadmap.stages[stageIndex].completed = !roadmap.stages[stageIndex].completed;
-                
-                // Сохраняем обновленные данные
-                localStorage.setItem('roadmaps', JSON.stringify(roadmaps));
-                
-                // Обновляем отображение RoadMap
-                viewRoadmap(roadmapId);
-                
-                // Обновляем список RoadMaps
-                renderRoadmapsList();
-            }
-            
-            closeViewBtn.addEventListener('click', () => {
-                roadmapView.classList.add('slide-out');
-                setTimeout(() => {
-                    roadmapView.classList.add('hidden');
-                    roadmapView.classList.remove('slide-out');
-                }, 300);
             });
+        });
+    }
+    
+    // ================ ЭТАПЫ ================ //
+    
+    addStageBtn.addEventListener('click', addStage);
+    stageNameInput.addEventListener('keypress', e => {
+        if (e.key === 'Enter') addStage();
+    });
+    
+    function addStage() {
+        const stageName = stageNameInput.value.trim();
+        const stageDescription = stageDescriptionInput.value.trim();
+        
+        if (stageName) {
+            stages.push({ 
+                name: stageName, 
+                description: stageDescription,
+                completed: false 
+            });
+            updateStagesList();
+            stageNameInput.value = '';
+            stageDescriptionInput.value = '';
+            stageNameInput.focus();
+        }
+    }
+    
+    function updateStagesList() {
+        if (stages.length === 0) {
+            stagesList.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400 italic">Этапы появятся здесь</p>';
+            return;
+        }
+
+        stagesList.innerHTML = '';
+        stages.forEach((stage, index) => {
+            const stageElement = document.createElement('div');
+            stageElement.className = 'stage-item flex justify-between items-center bg-gray-100 dark:bg-gray-700 p-2 rounded-md';
+            stageElement.setAttribute('data-index', index);
+
+            stageElement.innerHTML = `
+                <div class="flex items-start space-x-2 w-full">
+                    <span class="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300 text-xs font-medium px-2 py-0.5 rounded mt-1">${index + 1}</span>
+                    <div class="flex-1">
+                        <div class="${stage.completed ? 'line-through text-green-500' : 'text-gray-800 dark:text-gray-300'}">${stage.name}</div>
+                        ${stage.description ? `<div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${stage.description}</div>` : ''}
+                    </div>
+                </div>
+                <div class="flex space-x-2">
+                    <button class="complete-stage text-green-500 hover:text-green-700 dark:hover:text-green-400 text-sm" data-index="${index}" title="Выполнено">
+                        <i class="fas fa-check-circle"></i>
+                    </button>
+                    <button class="remove-stage text-red-500 hover:text-red-700 dark:hover:text-red-400" data-index="${index}" title="Удалить">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+            stagesList.appendChild(stageElement);
+        });
+
+        document.querySelectorAll('.remove-stage').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const index = parseInt(this.getAttribute('data-index'));
+                stages.splice(index, 1);
+                updateStagesList();
+            });
+        });
+
+        document.querySelectorAll('.complete-stage').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const index = parseInt(this.getAttribute('data-index'));
+                stages[index].completed = !stages[index].completed;
+                updateStagesList();
+            });
+        });
+    }
+    
+    // ================ СОХРАНЕНИЕ ROADMAP ================ //
+    
+    saveRoadmapBtn.addEventListener('click', saveRoadmap);
+    
+    async function saveRoadmap() {
+        const title = roadmapTitle.value.trim();
+        const description = roadmapDescription.value.trim();
+        
+        if (!title) {
+            alert('Пожалуйста, укажите название RoadMap');
+            return;
+        }
+        
+        if (stages.length === 0) {
+            alert('Пожалуйста, добавьте хотя бы один этап');
+            return;
+        }
+        
+        const newRoadmap = {
+            id: Date.now(),
+            title,
+            description,
+            tags: [...tags],
+            stages: [...stages],
+            createdAt: new Date().toLocaleDateString('ru-RU')
+        };
+        
+        roadmaps.unshift(newRoadmap);
+        localStorage.setItem('roadmaps', JSON.stringify(roadmaps));
+        
+        renderRoadmapsList();
+        renderTagFilters();
+        clearForm();
+        
+        // Синхронизация с GitHub
+        syncBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Синхронизация...';
+        await saveToGitHub();
+        syncBtn.innerHTML = '<i class="fas fa-sync-alt mr-1"></i> Синхронизировать';
+        
+        // Анимация успешного сохранения
+        saveRoadmapBtn.innerHTML = '<i class="fas fa-check mr-2"></i> Сохранено!';
+        saveRoadmapBtn.classList.remove('bg-green-500', 'hover:bg-green-600');
+        saveRoadmapBtn.classList.add('bg-green-600');
+        
+        setTimeout(() => {
+            saveRoadmapBtn.innerHTML = '<i class="fas fa-save mr-2"></i> Сохранить';
+            saveRoadmapBtn.classList.remove('bg-green-600');
+            saveRoadmapBtn.classList.add('bg-green-500', 'hover:bg-green-600');
+        }, 2000);
+        
+        if (window.innerWidth < 1024) closeMobilePanel();
+    }
+    
+    // ================ ОЧИСТКА ФОРМЫ ================ //
+    
+    clearFormBtn.addEventListener('click', clearForm);
+    
+    function clearForm() {
+        roadmapTitle.value = '';
+        roadmapDescription.value = '';
+        stageNameInput.value = '';
+        stageDescriptionInput.value = '';
+        tags = [];
+        stages = [];
+        renderTags();
+        updateStagesList();
+    }
+    
+    // ================ РАБОТА С ROADMAPS ================ //
+    
+    function calculateProgress(roadmap) {
+        const total = roadmap.stages.length;
+        const completed = roadmap.stages.filter(s => s.completed).length;
+        return total > 0 ? Math.round((completed / total) * 100) : 0;
+    }
+    
+    function renderRoadmapsList(filter = '', tagFilter = currentTagFilter) {
+        roadmapsList.innerHTML = '';
+        
+        let filteredRoadmaps = roadmaps;
+        
+        // Фильтрация по поиску
+        if (filter) {
+            filteredRoadmaps = filteredRoadmaps.filter(roadmap => 
+                roadmap.title.toLowerCase().includes(filter.toLowerCase()) || 
+                roadmap.description.toLowerCase().includes(filter.toLowerCase())
+            );
+        }
+        
+        // Фильтрация по тегу
+        if (tagFilter && tagFilter !== 'all') {
+            filteredRoadmaps = filteredRoadmaps.filter(roadmap => 
+                roadmap.tags && roadmap.tags.includes(tagFilter)
+            );
+        }
+        
+        if (filteredRoadmaps.length === 0) {
+            roadmapsList.innerHTML = `
+                <div class="text-center py-8">
+                    <i class="fas fa-road text-4xl text-gray-300 dark:text-gray-600 mb-3"></i>
+                    <p class="text-gray-500 dark:text-gray-400">RoadMaps не найдены</p>
+                </div>
+            `;
+            return;
+        }
+        
+        filteredRoadmaps.forEach(roadmap => {
+            const progress = calculateProgress(roadmap);
             
-            // Удаление RoadMap
-            function deleteRoadmap(id) {
-                if (confirm('Вы уверены, что хотите удалить этот RoadMap?')) {
-                    const roadmapElement = document.querySelector(`.roadmap-item .delete-btn[data-id="${id}"]`).closest('.roadmap-item');
-                    roadmapElement.classList.add('slide-out');
-                    
-                    setTimeout(() => {
-                        roadmaps = roadmaps.filter(r => r.id !== id);
-                        localStorage.setItem('roadmaps', JSON.stringify(roadmaps));
-                        renderRoadmapsList();
-                        renderTagFilters();
+            const roadmapElement = document.createElement('div');
+            roadmapElement.className = 'roadmap-item bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4 fade-in slide-in';
+            
+            roadmapElement.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h3 class="font-bold text-lg text-gray-800 dark:text-gray-100">${roadmap.title}</h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">${roadmap.description || 'Нет описания'}</p>
                         
-                        // Если удаляем просматриваемый RoadMap, закрываем просмотр
-                        if (viewTitle.getAttribute('data-id') == id) {
-                            roadmapView.classList.add('hidden');
-                        }
-                    }, 300);
-                }
-            }
-            
-            // Поиск RoadMap
-            const searchRoadmap = document.getElementById('searchRoadmap');
-            
-            searchRoadmap.addEventListener('input', () => {
-                const activeFilter = document.querySelector('.tag-filter.active');
-                const tag = activeFilter ? activeFilter.getAttribute('data-tag') : 'all';
+                        ${roadmap.tags && roadmap.tags.length > 0 ? `
+                            <div class="flex flex-wrap gap-1 mt-2">
+                                ${roadmap.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                    <div class="flex space-x-2">
+                        <button class="view-btn px-3 py-1 bg-blue-100 dark:bg-blue-800/50 text-blue-600 dark:text-blue-200 rounded-md text-sm hover:bg-blue-200 dark:hover:bg-blue-700 transition" data-id="${roadmap.id}">
+                            <i class="fas fa-eye mr-1"></i> Просмотр
+                        </button>
+                        <button class="delete-btn px-3 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-300 rounded-md text-sm hover:bg-red-200 dark:hover:bg-red-800/50 transition" data-id="${roadmap.id}">
+                            <i class="fas fa-trash-alt mr-1"></i> Удалить
+                        </button>
+                    </div>
+                </div>
+                <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+                    <div class="flex justify-between items-center">
+                        <div class="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                            <i class="fas fa-calendar-alt mr-1"></i>
+                            <span>Создано: ${roadmap.createdAt}</span>
+                        </div>
+                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            <span>${progress}% завершено</span>
+                        </div>
+                    </div>
+                    <div class="progress-bar mt-2">
+                        <div class="progress-fill" style="width: ${progress}%"></div>
+                    </div>
+                </div>
+            `;
+            roadmapsList.appendChild(roadmapElement);
+        });
+        
+        document.querySelectorAll('.view-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const id = parseInt(this.getAttribute('data-id'));
+                viewRoadmap(id);
+            });
+        });
+        
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const id = parseInt(this.getAttribute('data-id'));
+                deleteRoadmap(id);
+            });
+        });
+    }
+    
+    // ================ ФИЛЬТРЫ ПО ТЕГАМ ================ //
+    
+    function renderTagFilters() {
+        tagFiltersContainer.innerHTML = '';
+        
+        // Кнопка "Все"
+        const allButton = document.createElement('button');
+        allButton.className = `tag-filter px-3 py-1 ${currentTagFilter === 'all' ? 
+            'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 active' : 
+            'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'} rounded-full text-sm hover:bg-blue-200 dark:hover:bg-blue-800/50 transition`;
+        allButton.textContent = 'Все';
+        allButton.setAttribute('data-tag', 'all');
+        tagFiltersContainer.appendChild(allButton);
+        
+        // Собираем все уникальные теги
+        const allTags = [...new Set(roadmaps.flatMap(r => r.tags || []))];
+        
+        allTags.forEach(tag => {
+            const button = document.createElement('button');
+            button.className = `tag-filter px-3 py-1 ${currentTagFilter === tag ? 
+                'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 active' : 
+                'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'} rounded-full text-sm hover:bg-blue-200 dark:hover:bg-blue-800/50 transition`;
+            button.textContent = tag;
+            button.setAttribute('data-tag', tag);
+            tagFiltersContainer.appendChild(button);
+        });
+        
+        // Обработчики кликов
+        document.querySelectorAll('.tag-filter').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const tag = this.getAttribute('data-tag');
+                currentTagFilter = tag;
+                renderTagFilters();
                 renderRoadmapsList(searchRoadmap.value, tag);
             });
+        });
+    }
+    
+    // ================ ПРОСМОТР ROADMAP ================ //
+    
+    function viewRoadmap(id) {
+        const roadmap = roadmaps.find(r => r.id === id);
+        if (!roadmap) return;
+        
+        viewTitle.textContent = roadmap.title;
+        viewTitle.setAttribute('data-id', roadmap.id);
+        viewDescription.textContent = roadmap.description || 'Нет описания';
+        viewDate.textContent = `Создано: ${roadmap.createdAt}`;
+        
+        // Прогресс
+        const progress = calculateProgress(roadmap);
+        progressText.textContent = `${progress}%`;
+        progressFill.style.width = `${progress}%`;
+        
+        // Отрисовка этапов
+        timelineContent.innerHTML = '';
+        roadmap.stages.forEach((stage, index) => {
+            const stageElement = document.createElement('div');
+            stageElement.className = `relative ${index % 2 === 0 ? 'lg:pr-24' : 'lg:pl-24'} ${stage.completed ? 'stage-completed' : ''}`;
             
-            // Шаринг RoadMap
-            const shareBtn = document.getElementById('shareBtn');
-            const shareModal = document.getElementById('shareModal');
-            const closeShareModal = document.getElementById('closeShareModal');
-            const shareLink = document.getElementById('shareLink');
-            const copyLinkBtn = document.getElementById('copyLinkBtn');
-            
-            shareBtn.addEventListener('click', () => {
-                const currentRoadmapId = viewTitle.getAttribute('data-id');
-                if (currentRoadmapId) {
-                    const url = `${window.location.origin}${window.location.pathname}?roadmap=${currentRoadmapId}`;
-                    shareLink.value = url;
-                    shareModal.classList.remove('hidden');
-                }
+            stageElement.innerHTML = `
+                <div class="stage-dot absolute w-4 h-4 rounded-full bg-blue-500 border-4 border-white dark:border-gray-800 -left-2 lg:left-1/2 -translate-x-1/2 top-6 z-10"></div>
+                <div class="stage-content bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 ${index % 2 === 0 ? 'lg:mr-6' : 'lg:ml-6'}">
+                    <div class="flex items-center mb-2">
+                        <span class="bg-blue-500 text-white text-xs font-bold px-2 py-1 rounded mr-2">Этап ${index + 1}</span>
+                        <h4 class="font-semibold text-gray-800 dark:text-gray-200 stage-title">${stage.name}</h4>
+                    </div>
+                    ${stage.description ? `<p class="text-sm text-gray-600 dark:text-gray-300 mt-2">${stage.description}</p>` : ''}
+                    
+                    <div class="flex justify-between items-center mt-4">
+                        <div class="flex space-x-2">
+                            <span class="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-gray-600 dark:text-gray-300">${stage.completed ? 'Завершено' : 'В процессе'}</span>
+                        </div>
+                        <button class="complete-stage-btn px-3 py-1 ${stage.completed ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'} rounded-md text-sm hover:opacity-90 transition" data-roadmap-id="${roadmap.id}" data-stage-index="${index}">
+                            <i class="fas ${stage.completed ? 'fa-check-circle' : 'fa-circle'} mr-1"></i> ${stage.completed ? 'Выполнено' : 'Отметить'}
+                        </button>
+                    </div>
+                </div>
+            `;
+            timelineContent.appendChild(stageElement);
+        });
+        
+        // Обработчики для кнопок выполнения
+        document.querySelectorAll('.complete-stage-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const roadmapId = parseInt(this.getAttribute('data-roadmap-id'));
+                const stageIndex = parseInt(this.getAttribute('data-stage-index'));
+                toggleStageCompletion(roadmapId, stageIndex);
             });
-            
-            closeShareModal.addEventListener('click', () => {
-                shareModal.classList.add('hidden');
-            });
-            
-            copyLinkBtn.addEventListener('click', () => {
-                shareLink.select();
-                document.execCommand('copy');
-                
-                copyLinkBtn.innerHTML = '<i class="fas fa-check mr-1"></i> Скопировано';
-                setTimeout(() => {
-                    copyLinkBtn.innerHTML = '<i class="fas fa-copy"></i>';
-                }, 2000);
-            });
-            
-            // Проверка URL на наличие параметра roadmap
-            function checkUrlForRoadmap() {
-                const urlParams = new URLSearchParams(window.location.search);
-                const roadmapId = urlParams.get('roadmap');
-                
-                if (roadmapId) {
-                    const roadmap = roadmaps.find(r => r.id === parseInt(roadmapId));
-                    if (roadmap) {
-                        viewRoadmap(roadmap.id);
-                    }
-                }
-            }
-            
-            // Инициализация
+        });
+        
+        roadmapView.classList.remove('hidden');
+        roadmapView.classList.add('slide-in');
+        window.scrollTo({ top: roadmapView.offsetTop - 20, behavior: 'smooth' });
+    }
+    
+    closeViewBtn.addEventListener('click', () => {
+        roadmapView.classList.add('slide-out');
+        setTimeout(() => {
+            roadmapView.classList.add('hidden');
+            roadmapView.classList.remove('slide-out');
+        }, 300);
+    });
+    
+    // ================ ИЗМЕНЕНИЕ СТАТУСА ЭТАПА ================ //
+    
+    function toggleStageCompletion(roadmapId, stageIndex) {
+        const roadmap = roadmaps.find(r => r.id === roadmapId);
+        if (!roadmap) return;
+        
+        roadmap.stages[stageIndex].completed = !roadmap.stages[stageIndex].completed;
+        localStorage.setItem('roadmaps', JSON.stringify(roadmaps));
+        viewRoadmap(roadmapId);
+        renderRoadmapsList();
+        
+        // Синхронизация с GitHub
+        saveToGitHub();
+    }
+    
+    // ================ УДАЛЕНИЕ ROADMAP ================ //
+    
+    async function deleteRoadmap(id) {
+        if (!confirm('Вы уверены, что хотите удалить этот RoadMap?')) return;
+        
+        const roadmapElement = document.querySelector(`.roadmap-item .delete-btn[data-id="${id}"]`).closest('.roadmap-item');
+        roadmapElement.classList.add('slide-out');
+        
+        setTimeout(() => {
+            roadmaps = roadmaps.filter(r => r.id !== id);
+            localStorage.setItem('roadmaps', JSON.stringify(roadmaps));
             renderRoadmapsList();
             renderTagFilters();
-            checkUrlForRoadmap();
-        });
+            
+            if (viewTitle.getAttribute('data-id') == id) {
+                roadmapView.classList.add('hidden');
+            }
+            
+            // Синхронизация с GitHub
+            saveToGitHub();
+        }, 300);
+    }
+    
+    // ================ ПОИСК ================ //
+    
+    searchRoadmap.addEventListener('input', () => {
+        renderRoadmapsList(searchRoadmap.value);
+    });
+    
+    // ================ ШАРИНГ ================ //
+    
+    shareBtn.addEventListener('click', () => {
+        const currentRoadmapId = viewTitle.getAttribute('data-id');
+        if (currentRoadmapId) {
+            const url = `${window.location.origin}${window.location.pathname}?roadmap=${currentRoadmapId}`;
+            shareLink.value = url;
+            shareModal.classList.remove('hidden');
+        }
+    });
+    
+    closeShareModal.addEventListener('click', () => {
+        shareModal.classList.add('hidden');
+    });
+    
+    copyLinkBtn.addEventListener('click', () => {
+        shareLink.select();
+        document.execCommand('copy');
+        
+        copyLinkBtn.innerHTML = '<i class="fas fa-check mr-1"></i> Скопировано';
+        setTimeout(() => {
+            copyLinkBtn.innerHTML = '<i class="fas fa-copy"></i>';
+        }, 2000);
+    });
+    
+    // ================ ИНИЦИАЛИЗАЦИЯ ================ //
+    
+    function init() {
+        // Загрузка данных
+        loadFromGitHub();
+        
+        // Проверка URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const roadmapId = urlParams.get('roadmap');
+        if (roadmapId) {
+            const roadmap = roadmaps.find(r => r.id === parseInt(roadmapId));
+            if (roadmap) viewRoadmap(roadmap.id);
+        }
+    }
+    
+    init();
+});
     </script>
 </body>
 </html>
